@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TaskFlow</string>
+    <string name="channel_reminders">Recordatorios de tareas</string>
+    <string name="channel_reminders_description">Avisos locales para tareas con recordatorio</string>
+    <string name="today">Hoy</string>
+    <string name="all">Todas</string>
+    <string name="overdue">Vencidas</string>
+    <string name="completed">Completadas</string>
+    <string name="pending">Pendientes</string>
+</resources>

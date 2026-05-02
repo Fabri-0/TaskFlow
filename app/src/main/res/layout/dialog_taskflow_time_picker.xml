@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dialog_panel"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_dialog_edit_header"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/textPickerTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⏰ Hora del recordatorio"
+            android:textColor="@color/on_primary"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textPickerSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="El aviso sonara justo a la hora que marques."
+            android:textColor="@color/on_primary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_picker_shell"
+        android:padding="8dp">
+
+        <TimePicker
+            android:id="@+id/timePickerTaskFlow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:theme="@style/ThemeOverlay_TaskFlow_PickerWidget"
+            android:timePickerMode="clock" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonPickerCancel"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:minWidth="0dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:singleLine="true"
+            android:text="Cancelar"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            app:backgroundTint="@color/card_dark_soft"
+            app:icon="@drawable/ic_close_24"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@color/text_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonPickerConfirm"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:minWidth="0dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:singleLine="true"
+            android:text="Elegir hora"
+            android:textAllCaps="false"
+            android:textColor="@color/on_primary"
+            android:textSize="13sp"
+            app:backgroundTint="@color/accent_blue"
+            app:icon="@drawable/ic_notifications_24"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@color/on_primary" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/drawer_all"
+            android:icon="@drawable/ic_task_24"
+            android:title="Todas" />
+        <item
+            android:id="@+id/drawer_today"
+            android:icon="@drawable/ic_today_24"
+            android:title="Hoy" />
+        <item
+            android:id="@+id/drawer_starred"
+            android:icon="@drawable/ic_star_24"
+            android:title="Tareas estrella" />
+        <item
+            android:id="@+id/drawer_overdue"
+            android:icon="@drawable/ic_overdue_24"
+            android:title="Vencidas" />
+        <item
+            android:id="@+id/drawer_pending"
+            android:icon="@drawable/ic_pending_24"
+            android:title="Pendientes" />
+        <item
+            android:id="@+id/drawer_completed"
+            android:icon="@drawable/ic_check_circle_24"
+            android:title="Completadas" />
+    </group>
+
+    <group android:checkableBehavior="none">
+        <item
+            android:id="@+id/drawer_categories_header"
+            android:icon="@drawable/ic_folder_24"
+            android:title="Categorias +" />
+    </group>
+
+    <group
+        android:id="@+id/drawer_categories_group"
+        android:checkableBehavior="single" />
+
+    <group android:checkableBehavior="none">
+        <item
+            android:id="@+id/drawer_tags_header"
+            android:icon="@drawable/ic_tag_24"
+            android:title="Etiquetas +" />
+    </group>
+
+    <group
+        android:id="@+id/drawer_tags_group"
+        android:checkableBehavior="single" />
+
+    <group android:checkableBehavior="none">
+        <item
+            android:id="@+id/drawer_account_header"
+            android:icon="@drawable/ic_person_24"
+            android:title="Cuenta +" />
+    </group>
+
+    <group
+        android:id="@+id/drawer_account_group"
+        android:checkableBehavior="single" />
+</menu>

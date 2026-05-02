@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_dark">#09111F</color>
+    <color name="bg_dark_2">#0D1728</color>
+    <color name="card_dark">#182335</color>
+    <color name="card_dark_soft">#22324A</color>
+    <color name="primary_purple">#9B7CFF</color>
+    <color name="primary_purple_dark">#5D43D8</color>
+    <color name="accent_pink">#FF79B8</color>
+    <color name="accent_teal">#41E3C2</color>
+    <color name="accent_blue">#45B7FF</color>
+    <color name="text_primary">#F7F3FF</color>
+    <color name="text_secondary">#C8C0D6</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="surface_line">#31415A</color>
+    <color name="danger">#FF6B7A</color>
+    <color name="success">#76D39B</color>
+    <color name="warning">#FFD166</color>
+    <color name="transparent">#00000000</color>
+</resources>
