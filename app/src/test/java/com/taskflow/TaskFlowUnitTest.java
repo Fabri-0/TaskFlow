@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import com.taskflow.utils.DateUtils;
 import com.taskflow.utils.ProgressUtils;
 import com.taskflow.utils.Validators;
+import com.taskflow.utils.Constants;
 
 import org.junit.Test;
 
@@ -41,5 +42,12 @@ public class TaskFlowUnitTest {
     @Test
     public void timestampFormatsToReadableText() {
         assertFalse(DateUtils.formatDate(1_700_000_000_000L).isEmpty());
+    }
+
+    @Test
+    public void weeklyRecurrence_addsSevenDays() {
+        long start = DateUtils.startOfToday();
+        long next = DateUtils.addRecurrence(start, Constants.RECURRENCE_WEEKLY, 1);
+        assertEquals(start + 7L * 24L * 60L * 60L * 1000L, next);
     }
 }

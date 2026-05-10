@@ -1,8 +1,5 @@
 package com.taskflow.ui.task;
 
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,8 +10,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AlertDialog;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
@@ -25,7 +21,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.taskflow.R;
 import com.taskflow.data.local.entity.ProjectEntity;
 import com.taskflow.data.local.entity.TagEntity;
-import com.taskflow.notifications.ReminderScheduler;
+import com.taskflow.notifications.ReminderPermissionHelper;
 import com.taskflow.ui.common.TaskFlowPickerDialogs;
 import com.taskflow.utils.DateUtils;
 
@@ -78,11 +74,8 @@ public class QuickTaskBottomSheet extends BottomSheetDialogFragment {
             buttonQuickDueDate.setText(DateUtils.formatDate(dueDate));
         }));
         buttonQuickReminder.setOnClickListener(v -> {
-            requestNotificationPermissionIfNeeded();
-            pickDateTime(value -> {
-                reminderDate = value;
-                buttonQuickReminder.setText(DateUtils.formatDateTime(reminderDate));
-            });
+            ReminderPermissionHelper.ensureReminderAccess(requireActivity());
+            showReminderOptions();
         });
         buttonQuickSave.setOnClickListener(v -> save());
         viewModel.getSaved().observe(getViewLifecycleOwner(), saved -> {
@@ -101,21 +94,17 @@ public class QuickTaskBottomSheet extends BottomSheetDialogFragment {
             inputQuickTitle.setError("El titulo es obligatorio.");
             return;
         }
-        if (reminderDate != null && !new ReminderScheduler(requireContext()).canNotify()) {
-            Toast.makeText(requireContext(), "No hay permiso de notificaciones; la tarea se guardara sin mostrar aviso.", Toast.LENGTH_LONG).show();
+        if (reminderDate != null) {
+            ReminderPermissionHelper.ensureReminderAccess(requireActivity());
+        }
+        if (reminderDate != null && !ReminderPermissionHelper.hasReminderAccess(requireContext())) {
+            Toast.makeText(requireContext(), "Faltan permisos de alarmas. Activalos para que la alarma suene aunque la app este cerrada.", Toast.LENGTH_LONG).show();
         }
         viewModel.createTask(title, "", dueDate, reminderDate,
                 selected(dropdownQuickProject, NO_PROJECT),
                 selected(dropdownQuickTag, NO_TAG),
                 collectSubtasks(),
                 false);
-    }
-
-    private void requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(requireActivity(), new String[]{Manifest.permission.POST_NOTIFICATIONS}, 42);
-        }
     }
 
     private void addSubtaskField(String value) {
@@ -196,6 +185,58 @@ public class QuickTaskBottomSheet extends BottomSheetDialogFragment {
 
     private void pickDateTime(DateResult result) {
         TaskFlowPickerDialogs.showDateTimePicker(requireContext(), result::onSelected);
+    }
+
+    private void showReminderOptions() {
+        List<String> labels = new ArrayList<>();
+        List<Long> values = new ArrayList<>();
+        labels.add("Elegir fecha y hora");
+        values.add(null);
+        addPreset(labels, values, "En 1 hora", 1L * 60L * 60L * 1000L);
+        addPreset(labels, values, "En 5 horas", 5L * 60L * 60L * 1000L);
+        addPreset(labels, values, "En 12 horas", 12L * 60L * 60L * 1000L);
+        addPreset(labels, values, "En 2 dias", 2L * 24L * 60L * 60L * 1000L);
+        addPreset(labels, values, "En 3 dias", 3L * 24L * 60L * 60L * 1000L);
+        if (dueDate != null) {
+            addBeforeDue(labels, values, "1 hora antes de la fecha limite", 1L * 60L * 60L * 1000L);
+            addBeforeDue(labels, values, "5 horas antes de la fecha limite", 5L * 60L * 60L * 1000L);
+            addBeforeDue(labels, values, "12 horas antes de la fecha limite", 12L * 60L * 60L * 1000L);
+            addBeforeDue(labels, values, "2 dias antes de la fecha limite", 2L * 24L * 60L * 60L * 1000L);
+            addBeforeDue(labels, values, "3 dias antes de la fecha limite", 3L * 24L * 60L * 60L * 1000L);
+        }
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Configurar alarma")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> {
+                    Long value = values.get(which);
+                    if (value == null) {
+                        pickDateTime(this::setReminder);
+                    } else {
+                        setReminder(value);
+                    }
+                })
+                .show();
+    }
+
+    private void addPreset(List<String> labels, List<Long> values, String label, long offset) {
+        labels.add(label);
+        values.add(System.currentTimeMillis() + offset);
+    }
+
+    private void addBeforeDue(List<String> labels, List<Long> values, String label, long offset) {
+        long value = dueDate - offset;
+        if (value > System.currentTimeMillis()) {
+            labels.add(label);
+            values.add(value);
+        }
+    }
+
+    private void setReminder(long value) {
+        if (value <= System.currentTimeMillis()) {
+            Toast.makeText(requireContext(), "La alarma debe quedar en el futuro.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        reminderDate = value;
+        buttonQuickReminder.setText(DateUtils.formatDateTime(reminderDate));
     }
 
     private String text(TextInputEditText editText) {

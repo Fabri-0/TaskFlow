@@ -11,6 +11,18 @@
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 
+    <style name="Theme.TaskFlow.Alarm" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_purple</item>
+        <item name="colorSecondary">@color/accent_pink</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+
     <style name="Widget.TaskFlow.TextInput" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
         <item name="boxBackgroundColor">@color/card_dark</item>
         <item name="boxStrokeColor">@color/primary_purple</item>

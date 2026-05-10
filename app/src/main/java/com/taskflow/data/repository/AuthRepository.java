@@ -9,15 +9,18 @@ import com.taskflow.data.local.dao.SubtaskDao;
 import com.taskflow.data.local.dao.TagDao;
 import com.taskflow.data.local.dao.TaskDao;
 import com.taskflow.data.local.dao.TaskTagDao;
+import com.taskflow.data.local.dao.TaskTemplateDao;
 import com.taskflow.data.local.dao.UserDao;
 import com.taskflow.data.local.db.AppDatabase;
 import com.taskflow.data.local.entity.ProjectEntity;
 import com.taskflow.data.local.entity.SubtaskEntity;
 import com.taskflow.data.local.entity.TagEntity;
 import com.taskflow.data.local.entity.TaskEntity;
+import com.taskflow.data.local.entity.TaskTemplateEntity;
 import com.taskflow.data.local.entity.TaskTagCrossRef;
 import com.taskflow.data.local.entity.UserEntity;
 import com.taskflow.session.SessionManager;
+import com.taskflow.utils.Constants;
 import com.taskflow.utils.PasswordUtils;
 import com.taskflow.utils.Validators;
 
@@ -32,6 +35,7 @@ public class AuthRepository {
     private final SubtaskDao subtaskDao;
     private final TagDao tagDao;
     private final TaskTagDao taskTagDao;
+    private final TaskTemplateDao taskTemplateDao;
     private final SessionManager sessionManager;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -44,6 +48,7 @@ public class AuthRepository {
         subtaskDao = database.subtaskDao();
         tagDao = database.tagDao();
         taskTagDao = database.taskTagDao();
+        taskTemplateDao = database.taskTemplateDao();
         sessionManager = new SessionManager(context);
     }
 
@@ -161,14 +166,15 @@ public class AuthRepository {
 
     private void seedDemoDataIfNeeded(long userId) {
         if (taskDao.countTasksForUser(userId) > 0) {
+            seedTemplateIfNeeded(userId);
             return;
         }
-        long categoryOne = projectDao.insertProject(new ProjectEntity("Categoria 1", "#B56BE8", userId));
-        long categoryTwo = projectDao.insertProject(new ProjectEntity("Categoria 2", "#FFD166", userId));
-        long categoryThree = projectDao.insertProject(new ProjectEntity("Categoria 3", "#EFA4C8", userId));
-        long tagOne = tagDao.insertTag(new TagEntity("Etiqueta 1", "#B56BE8", userId));
-        long tagTwo = tagDao.insertTag(new TagEntity("Etiqueta 2", "#76D39B", userId));
-        long tagThree = tagDao.insertTag(new TagEntity("Etiqueta 3", "#5BC0EB", userId));
+        long categoryOne = projectDao.insertProject(new ProjectEntity("Estudio", "#5BC0EB", userId));
+        long categoryTwo = projectDao.insertProject(new ProjectEntity("Trabajo", "#B56BE8", userId));
+        long categoryThree = projectDao.insertProject(new ProjectEntity("Personal", "#76D39B", userId));
+        long tagOne = tagDao.insertTag(new TagEntity("Prioritario", "#EF476F", userId));
+        long tagTwo = tagDao.insertTag(new TagEntity("Revision", "#FFD166", userId));
+        long tagThree = tagDao.insertTag(new TagEntity("Ideas", "#5BC0EB", userId));
 
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.HOUR_OF_DAY, 17);
@@ -176,27 +182,51 @@ public class AuthRepository {
         calendar.set(Calendar.SECOND, 0);
         calendar.set(Calendar.MILLISECOND, 0);
 
-        TaskEntity taskOne = new TaskEntity("Tarea 1", "Descripcion de ejemplo para una tarea pendiente.", userId, calendar.getTimeInMillis(), null);
+        TaskEntity taskOne = new TaskEntity("Organizar la bandeja inicial", "Ejemplo simple sin subtareas para ver como funciona una tarea directa.", userId, calendar.getTimeInMillis(), null);
         taskOne.projectId = categoryOne;
+        taskOne.priority = Constants.PRIORITY_MEDIUM;
         long taskOneId = taskDao.insertTask(taskOne);
-        subtaskDao.insertSubtask(new SubtaskEntity(taskOneId, "Subtarea 1", false));
-        subtaskDao.insertSubtask(new SubtaskEntity(taskOneId, "Subtarea 2", false));
         taskTagDao.insertRelation(new TaskTagCrossRef(taskOneId, tagOne));
 
         calendar.add(Calendar.DAY_OF_MONTH, 2);
-        TaskEntity taskTwo = new TaskEntity("Tarea 2", "Ejemplo con fecha proxima para probar el calendario.", userId, calendar.getTimeInMillis(), null);
+        TaskEntity taskTwo = new TaskEntity("Preparar entrega de proyecto", "Muestra una tarea en progreso: una subtarea ya esta hecha y las demas quedan pendientes.", userId, calendar.getTimeInMillis(), null);
         taskTwo.projectId = categoryTwo;
+        taskTwo.priority = Constants.PRIORITY_HIGH;
+        taskTwo.isStarred = true;
+        taskTwo.boardColumn = Constants.BOARD_DOING;
         long taskTwoId = taskDao.insertTask(taskTwo);
-        subtaskDao.insertSubtask(new SubtaskEntity(taskTwoId, "Subtarea 1", false));
+        subtaskDao.insertSubtask(new SubtaskEntity(taskTwoId, "Reunir requisitos", true));
+        subtaskDao.insertSubtask(new SubtaskEntity(taskTwoId, "Preparar resumen", false));
+        subtaskDao.insertSubtask(new SubtaskEntity(taskTwoId, "Enviar version final", false));
         taskTagDao.insertRelation(new TaskTagCrossRef(taskTwoId, tagTwo));
 
         calendar.add(Calendar.DAY_OF_MONTH, 1);
-        TaskEntity taskThree = new TaskEntity("Tarea 3", "Muestra de una tarea ya completada.", userId, calendar.getTimeInMillis(), null);
+        TaskEntity taskThree = new TaskEntity("Revisar rutina completada", "Ejemplo de tarea lista para mostrar el cierre y el tablero.", userId, calendar.getTimeInMillis(), null);
         taskThree.projectId = categoryThree;
         taskThree.isCompleted = true;
+        taskThree.completedAt = System.currentTimeMillis();
+        taskThree.boardColumn = Constants.BOARD_DONE;
         long taskThreeId = taskDao.insertTask(taskThree);
-        subtaskDao.insertSubtask(new SubtaskEntity(taskThreeId, "Subtarea 1", true));
+        subtaskDao.insertSubtask(new SubtaskEntity(taskThreeId, "Confirmar checklist", true));
+        subtaskDao.insertSubtask(new SubtaskEntity(taskThreeId, "Guardar evidencia", true));
         taskTagDao.insertRelation(new TaskTagCrossRef(taskThreeId, tagThree));
+        seedTemplateIfNeeded(userId);
+    }
+
+    private void seedTemplateIfNeeded(long userId) {
+        if (taskTemplateDao.countByName(userId, "Revision semanal") > 0) {
+            return;
+        }
+        TaskTemplateEntity template = new TaskTemplateEntity(userId, "Revision semanal", "Planificar la semana");
+        template.description = "Revisar pendientes, elegir prioridades y dejar claro el siguiente paso.";
+        template.projectName = "Personal";
+        template.tagsCsv = "Revision, Prioritario";
+        template.subtasksCsv = "Revisar tareas abiertas\nElegir 3 prioridades\nProgramar alarmas necesarias";
+        template.priority = Constants.PRIORITY_MEDIUM;
+        template.boardColumn = Constants.BOARD_TODO;
+        template.recurrenceType = Constants.RECURRENCE_WEEKLY;
+        template.estimatedMinutes = 30;
+        taskTemplateDao.insertTemplate(template);
     }
 
     private <T> void postSuccess(ResultCallback<T> callback, T value) {

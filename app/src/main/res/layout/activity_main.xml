@@ -63,32 +63,72 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/bg_home_panel"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="12dp">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Hoy"
-                    android:textColor="@color/on_primary"
-                    android:textSize="30sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/textHomeTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Hoy"
+                        android:textColor="@color/on_primary"
+                        android:textSize="25sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/inputSearchContainer"
+                        style="@style/Widget.TaskFlow.TextInput"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:layout_weight="1.45"
+                        android:hint="Buscar"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/editSearch"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:imeOptions="actionSearch"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:textColor="@color/text_primary"
+                            android:textSize="13sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <ImageButton
+                        android:id="@+id/buttonSearchToggle"
+                        android:layout_width="42dp"
+                        android:layout_height="42dp"
+                        android:background="@drawable/bg_profile_glass"
+                        android:contentDescription="Buscar tarea"
+                        android:padding="10dp"
+                        android:src="@drawable/ic_search_24"
+                        app:tint="@color/on_primary" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/textProgress"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="2dp"
                     android:text="Progreso 0%"
                     android:textColor="@color/on_primary"
-                    android:textSize="14sp" />
+                    android:textSize="13sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="8dp"
                     android:orientation="horizontal">
 
                     <TextView
@@ -98,10 +138,10 @@
                         android:layout_marginEnd="8dp"
                         android:layout_weight="1"
                         android:background="@drawable/bg_profile_glass"
-                        android:padding="12dp"
+                        android:padding="8dp"
                         android:text="📅 Hoy\n0"
                         android:textColor="@color/on_primary"
-                        android:textSize="14sp"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -111,18 +151,18 @@
                         android:layout_marginStart="8dp"
                         android:layout_weight="1"
                         android:background="@drawable/bg_profile_glass"
-                        android:padding="12dp"
+                        android:padding="8dp"
                         android:text="⏳ Pendientes\n0"
                         android:textColor="@color/on_primary"
-                        android:textSize="14sp"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
                     android:id="@+id/progressIndicator"
                     android:layout_width="match_parent"
-                    android:layout_height="8dp"
-                    android:layout_marginTop="14dp"
+                    android:layout_height="6dp"
+                    android:layout_marginTop="9dp"
                     android:max="100"
                     android:progress="0"
                     app:indicatorColor="@color/on_primary"
@@ -164,7 +204,14 @@
                         style="@style/Widget.TaskFlow.FilterChip"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Estrella" />
+                        android:text="Favoritas" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipUpcoming"
+                        style="@style/Widget.TaskFlow.FilterChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Proximas" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chipOverdue"
@@ -178,39 +225,70 @@
                         style="@style/Widget.TaskFlow.FilterChip"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Pendientes" />
+                        android:text="Pendientes"
+                        android:visibility="gone" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chipCompleted"
                         style="@style/Widget.TaskFlow.FilterChip"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Completadas" />
+                        android:text="Completadas"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipNoDate"
+                        style="@style/Widget.TaskFlow.FilterChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sin fecha"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipArchived"
+                        style="@style/Widget.TaskFlow.FilterChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Archivo"
+                        android:visibility="gone" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipTrash"
+                        style="@style/Widget.TaskFlow.FilterChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Papelera"
+                        android:visibility="gone" />
                 </com.google.android.material.chip.ChipGroup>
             </HorizontalScrollView>
 
-            <com.google.android.material.textfield.TextInputLayout
-                style="@style/Widget.TaskFlow.TextInput"
+            <LinearLayout
+                android:id="@+id/advancedFiltersPanel"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:hint="Buscar tarea"
-                app:startIconDrawable="@drawable/ic_search_24"
-                app:startIconTint="@color/text_secondary">
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_card_dark"
+                android:orientation="vertical"
+                android:padding="0dp">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/editSearch"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonFilterMenu"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text"
-                    android:textColor="@color/text_primary" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_height="48dp"
+                    android:text="Filtros"
+                    android:textAllCaps="false"
+                    android:textColor="@color/on_primary"
+                    android:textSize="14sp"
+                    app:icon="@drawable/ic_priority_24"
+                    app:iconTint="@color/on_primary"
+                    app:backgroundTint="@color/primary_purple" />
+            </LinearLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerTasks"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
                 android:layout_weight="1"
                 android:clipToPadding="false"
                 android:paddingBottom="96dp" />

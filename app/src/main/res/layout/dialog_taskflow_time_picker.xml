@@ -18,7 +18,7 @@
             android:id="@+id/textPickerTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="⏰ Hora del recordatorio"
+            android:text="⏰ Hora de la alarma"
             android:textColor="@color/on_primary"
             android:textSize="22sp"
             android:textStyle="bold" />

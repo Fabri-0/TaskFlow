@@ -11,7 +11,9 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.taskflow.R;
+import com.taskflow.data.local.entity.TagEntity;
 import com.taskflow.data.local.relation.TaskFull;
+import com.taskflow.utils.Constants;
 import com.taskflow.utils.DateUtils;
 import com.taskflow.utils.ProgressUtils;
 
@@ -28,6 +30,12 @@ public class TaskAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         void onTaskClicked(TaskFull task);
 
         void onTaskCompleted(TaskFull task, boolean completed);
+
+        default void onTaskLongPressed(TaskFull task) {
+        }
+
+        default void onTaskMoved(TaskFull task, int adapterPosition) {
+        }
     }
 
     private final Listener listener;
@@ -42,7 +50,11 @@ public class TaskAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         Map<String, List<TaskFull>> grouped = new LinkedHashMap<>();
         grouped.put("Vencidas / Anterior", new ArrayList<>());
         grouped.put("Hoy", new ArrayList<>());
-        grouped.put("Proximas", new ArrayList<>());
+        grouped.put("Proximas 7 dias", new ArrayList<>());
+        grouped.put("Sin fecha", new ArrayList<>());
+        grouped.put("Mas adelante", new ArrayList<>());
+        grouped.put("Archivadas", new ArrayList<>());
+        grouped.put("Papelera", new ArrayList<>());
         if (tasks != null) {
             for (TaskFull task : tasks) {
                 grouped.get(sectionFor(task)).add(task);
@@ -103,18 +115,41 @@ public class TaskAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return position >= 0 && position < rows.size() && rows.get(position).type == TYPE_TASK;
     }
 
+    public void moveTaskRow(int fromPosition, int toPosition) {
+        if (!isTaskRow(fromPosition) || !isTaskRow(toPosition)) {
+            return;
+        }
+        Row row = rows.remove(fromPosition);
+        rows.add(toPosition, row);
+        notifyItemMoved(fromPosition, toPosition);
+        listener.onTaskMoved(row.task, toPosition);
+    }
+
     private String sectionFor(TaskFull task) {
         if (task == null || task.task == null) {
-            return "Proximas";
+            return "Mas adelante";
+        }
+        if (task.task.isDeleted) {
+            return "Papelera";
+        }
+        if (task.task.isArchived) {
+            return "Archivadas";
         }
         if (DateUtils.isOverdue(task.task.dueDate, task.task.isCompleted)) {
             return "Vencidas / Anterior";
         }
         Long dueDate = task.task.dueDate;
+        if (dueDate == null) {
+            return "Sin fecha";
+        }
         if (dueDate != null && dueDate >= DateUtils.startOfToday() && dueDate <= DateUtils.endOfToday()) {
             return "Hoy";
         }
-        return "Proximas";
+        long sevenDays = DateUtils.startOfToday() + 7L * 24L * 60L * 60L * 1000L;
+        if (dueDate <= sevenDays) {
+            return "Proximas 7 dias";
+        }
+        return "Mas adelante";
     }
 
     private static class Row {
@@ -173,13 +208,68 @@ public class TaskAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     ? textTitle.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG
                     : textTitle.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
             String project = taskFull.project == null ? "Sin categoria" : taskFull.project.name;
-            textMeta.setText(DateUtils.formatDate(taskFull.task.dueDate) + " - " + project);
+            textMeta.setText(metaText(taskFull, project));
             int done = ProgressUtils.completedSubtasks(taskFull.subtasks);
             int total = taskFull.subtasks == null ? 0 : taskFull.subtasks.size();
-            textProgressSmall.setText(total == 0 ? "Sin subtareas" : "Subtareas " + ProgressUtils.formatCounter(done, total));
+            String small = total == 0 ? "☘️ Sin subtareas" : "☘️ Subtareas " + ProgressUtils.formatCounter(done, total);
+            if (!taskFull.task.recurrenceType.isEmpty()) {
+                small += " - " + DateUtils.recurrenceLabel(taskFull.task.recurrenceType, taskFull.task.recurrenceInterval);
+            }
+            if (!taskFull.task.attachment.isEmpty()) {
+                small += " - 🖼️ imagen";
+            }
+            textProgressSmall.setText(small);
             textStar.setVisibility(taskFull.task.isStarred ? View.VISIBLE : View.INVISIBLE);
+            textStar.setText(priorityBadge(taskFull.task.priority, taskFull.task.isStarred));
             itemView.setOnClickListener(v -> listener.onTaskClicked(taskFull));
+            itemView.setOnLongClickListener(v -> {
+                listener.onTaskLongPressed(taskFull);
+                return true;
+            });
             checkCompleted.setOnCheckedChangeListener((buttonView, isChecked) -> listener.onTaskCompleted(taskFull, isChecked));
+        }
+
+        private String metaText(TaskFull taskFull, String project) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(DateUtils.formatDate(taskFull.task.dueDate)).append(" - ").append(project);
+            if (taskFull.tags != null && !taskFull.tags.isEmpty()) {
+                builder.append(" - ");
+                for (int i = 0; i < taskFull.tags.size(); i++) {
+                    TagEntity tag = taskFull.tags.get(i);
+                    if (tag == null) {
+                        continue;
+                    }
+                    if (i > 0) {
+                        builder.append(", ");
+                    }
+                    builder.append(tag.name);
+                }
+            }
+            builder.append(" - ").append(priorityLabel(taskFull.task.priority));
+            return builder.toString();
+        }
+
+        private String priorityLabel(int priority) {
+            if (priority >= Constants.PRIORITY_URGENT) {
+                return "Urgente";
+            }
+            if (priority >= Constants.PRIORITY_HIGH) {
+                return "Alta";
+            }
+            if (priority >= Constants.PRIORITY_MEDIUM) {
+                return "Media";
+            }
+            return "Baja";
+        }
+
+        private String priorityBadge(int priority, boolean starred) {
+            if (priority >= Constants.PRIORITY_URGENT) {
+                return "!";
+            }
+            if (priority >= Constants.PRIORITY_HIGH) {
+                return "^";
+            }
+            return starred ? "*" : "";
         }
     }
 }

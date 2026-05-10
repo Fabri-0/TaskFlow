@@ -9,6 +9,12 @@
     <color name="accent_pink">#DB2777</color>
     <color name="accent_teal">#0F9F8B</color>
     <color name="accent_blue">#2563EB</color>
+    <color name="accent_pink_dark">#9D174D</color>
+    <color name="accent_teal_dark">#0F766E</color>
+    <color name="accent_blue_dark">#1D4ED8</color>
+    <color name="success_dark">#166534</color>
+    <color name="warning_dark">#B45309</color>
+    <color name="danger_dark">#B91C1C</color>
     <color name="text_primary">#211A32</color>
     <color name="text_secondary">#6F6780</color>
     <color name="on_primary">#FFFFFF</color>

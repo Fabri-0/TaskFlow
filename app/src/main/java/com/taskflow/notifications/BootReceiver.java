@@ -23,7 +23,13 @@ public class BootReceiver extends BroadcastReceiver {
             ReminderScheduler scheduler = new ReminderScheduler(context);
             for (TaskEntity task : tasks) {
                 if (task.reminderDate != null) {
-                    scheduler.schedule(task.id, task.title, task.reminderDate);
+                    scheduler.schedule(task.id, 1, task.title, task.reminderDate);
+                }
+                if (task.reminderDate2 != null) {
+                    scheduler.schedule(task.id, 2, task.title, task.reminderDate2);
+                }
+                if (task.reminderDate3 != null) {
+                    scheduler.schedule(task.id, 3, task.title, task.reminderDate3);
                 }
             }
         });

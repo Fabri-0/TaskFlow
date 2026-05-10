@@ -26,7 +26,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Categorias y etiquetas 🏷️"
+                android:text="Organizacion"
                 android:textColor="@color/on_primary"
                 android:textSize="27sp"
                 android:textStyle="bold" />

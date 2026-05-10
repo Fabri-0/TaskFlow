@@ -12,7 +12,7 @@
         <item
             android:id="@+id/drawer_starred"
             android:icon="@drawable/ic_star_24"
-            android:title="Tareas estrella" />
+            android:title="Favoritas" />
         <item
             android:id="@+id/drawer_overdue"
             android:icon="@drawable/ic_overdue_24"

@@ -9,7 +9,11 @@
         android:icon="@drawable/ic_calendar_24"
         android:title="Calendario" />
     <item
+        android:id="@+id/nav_productivity"
+        android:icon="@drawable/ic_today_24"
+        android:title="Avance" />
+    <item
         android:id="@+id/nav_profile"
         android:icon="@drawable/ic_person_24"
-        android:title="Mios" />
+        android:title="Perfil" />
 </menu>

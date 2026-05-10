@@ -1,11 +1,8 @@
 package com.taskflow.ui.profile;
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -22,8 +19,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.google.android.material.button.MaterialButton;
@@ -39,6 +34,7 @@ import com.taskflow.data.local.relation.TaskFull;
 import com.taskflow.data.repository.ProjectRepository;
 import com.taskflow.data.repository.TagRepository;
 import com.taskflow.data.repository.TaskRepository;
+import com.taskflow.notifications.ReminderPermissionHelper;
 import com.taskflow.session.SessionManager;
 import com.taskflow.ui.auth.AuthViewModel;
 import com.taskflow.ui.auth.LoginActivity;
@@ -57,8 +53,6 @@ import java.util.Locale;
 import java.util.Map;
 
 public class ProfileActivity extends AppCompatActivity {
-    private static final int REQUEST_NOTIFICATIONS = 41;
-
     private SessionManager sessionManager;
     private TextView textCompletionRate;
     private LinearProgressIndicator progressProfileCompletion;
@@ -151,6 +145,14 @@ public class ProfileActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (textNotificationStatus != null) {
+            updateNotificationStatus();
+        }
+    }
+
     private void updateThemeStatus(boolean darkMode) {
         textThemeStatus.setText(darkMode ? "Tema oscuro activo 🌙" : "Tema claro activo ☀️");
     }
@@ -204,7 +206,7 @@ public class ProfileActivity extends AppCompatActivity {
         setCompactMetricNumber(textTotalTasks, "🧾 Total", total);
         setCompactMetricNumber(textPendingTasks, "⏳ Pendientes", pending);
         setCompactMetricNumber(textCompletedTasks, "✅ Hechas", completed);
-        setCompactMetricNumber(textStarredTasks, "⭐ Estrella", starred);
+        setCompactMetricNumber(textStarredTasks, "⭐ Favoritas", starred);
         textBusyDay.setText("🔥 Dia mas cargado: " + busiestDayText(dueDays));
     }
 
@@ -262,8 +264,8 @@ public class ProfileActivity extends AppCompatActivity {
                 tasksMatching(task -> task.task.isCompleted)
         ));
         textStarredTasks.setOnClickListener(v -> showTasksDialog(
-                "Tareas estrella ⭐",
-                "Prioridades que marcaste con estrella.",
+                "Favoritas ⭐",
+                "Tareas que marcaste como favoritas.",
                 tasksMatching(task -> task.task.isStarred)
         ));
         textBusyDay.setOnClickListener(v -> showTasksDialog(
@@ -592,31 +594,22 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void updateNotificationStatus() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            textNotificationStatus.setText("Los recordatorios estan disponibles en este dispositivo.");
-            buttonNotificationPermission.setEnabled(false);
-            buttonNotificationPermission.setText("Notificaciones disponibles");
-            return;
-        }
-        boolean granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-        textNotificationStatus.setText(granted
-                ? "Permiso concedido. Los recordatorios podran avisarte."
-                : "Activa el permiso para recibir avisos de tus tareas.");
-        buttonNotificationPermission.setEnabled(!granted);
-        buttonNotificationPermission.setText(granted ? "Notificaciones activas" : "Activar notificaciones");
+        boolean ready = ReminderPermissionHelper.hasReminderAccess(this);
+        textNotificationStatus.setText(ready
+                ? "Alarmas listas: hora exacta, pantalla completa y segundo plano configurados."
+                : "Configura los permisos para que las alarmas suenen aunque TaskFlow este cerrada.");
+        buttonNotificationPermission.setEnabled(!ready);
+        buttonNotificationPermission.setText(ready ? "Alarmas listas" : "Configurar alarmas");
     }
 
     private void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
-        }
+        ReminderPermissionHelper.ensureReminderAccess(this);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_NOTIFICATIONS) {
+        if (requestCode == ReminderPermissionHelper.REQUEST_NOTIFICATIONS) {
             updateNotificationStatus();
         }
     }

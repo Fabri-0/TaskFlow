@@ -116,7 +116,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Subtareas 🧩"
+                android:text="☘️ Subtareas"
                 android:textColor="@color/text_primary"
                 android:textSize="17sp"
                 android:textStyle="bold" />
@@ -165,7 +165,7 @@
                 android:layout_width="0dp"
                 android:layout_height="50dp"
                 android:layout_weight="1"
-                android:text="Recordatorio"
+                android:text="Alarma"
                 android:textAllCaps="false"
                 android:textColor="@color/text_primary"
                 android:textSize="12sp"

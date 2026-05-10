@@ -19,7 +19,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Mios 🐇"
+            android:text="Perfil"
             android:textColor="@color/text_primary"
             android:textSize="31sp"
             android:textStyle="bold" />
@@ -213,7 +213,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Ajustes utiles ⚙️"
+                android:text="Ajustes"
                 android:textColor="@color/text_primary"
                 android:textSize="21sp"
                 android:textStyle="bold" />
@@ -227,6 +227,7 @@
                 android:textAllCaps="false"
                 android:textColor="@color/on_primary"
                 android:textSize="15sp"
+                android:visibility="gone"
                 app:backgroundTint="@color/primary_purple"
                 app:icon="@drawable/ic_person_24"
                 app:iconTint="@color/on_primary" />
@@ -254,16 +255,18 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:visibility="gone" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/buttonNotificationPermission"
                 android:layout_width="match_parent"
                 android:layout_height="50dp"
                 android:layout_marginTop="10dp"
-                android:text="Activar notificaciones 🔔"
+                android:text="Configurar alarmas ⏰"
                 android:textAllCaps="false"
                 android:textColor="@color/text_primary"
+                android:visibility="gone"
                 app:backgroundTint="@color/card_dark_soft"
                 app:icon="@drawable/ic_notifications_24"
                 app:iconTint="@color/text_secondary" />
@@ -274,7 +277,7 @@
             android:layout_width="match_parent"
             android:layout_height="54dp"
             android:layout_marginTop="14dp"
-            android:text="Editar categorias y etiquetas 🏷️"
+            android:text="Organizacion"
             android:textAllCaps="false"
             android:textColor="@color/on_primary"
             android:textSize="15sp"

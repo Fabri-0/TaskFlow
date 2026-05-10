@@ -68,4 +68,32 @@ public final class DateUtils {
     public static boolean isOverdue(Long dueDate, boolean completed) {
         return dueDate != null && !completed && dueDate < startOfToday();
     }
+
+    public static long addRecurrence(long timestamp, String recurrenceType, int interval) {
+        int safeInterval = Math.max(1, interval);
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        if (Constants.RECURRENCE_DAILY.equals(recurrenceType)) {
+            calendar.add(Calendar.DAY_OF_MONTH, safeInterval);
+        } else if (Constants.RECURRENCE_WEEKLY.equals(recurrenceType)) {
+            calendar.add(Calendar.WEEK_OF_YEAR, safeInterval);
+        } else if (Constants.RECURRENCE_MONTHLY.equals(recurrenceType)) {
+            calendar.add(Calendar.MONTH, safeInterval);
+        }
+        return calendar.getTimeInMillis();
+    }
+
+    public static String recurrenceLabel(String recurrenceType, int interval) {
+        int safeInterval = Math.max(1, interval);
+        if (Constants.RECURRENCE_DAILY.equals(recurrenceType)) {
+            return safeInterval == 1 ? "Cada dia" : "Cada " + safeInterval + " dias";
+        }
+        if (Constants.RECURRENCE_WEEKLY.equals(recurrenceType)) {
+            return safeInterval == 1 ? "Cada semana" : "Cada " + safeInterval + " semanas";
+        }
+        if (Constants.RECURRENCE_MONTHLY.equals(recurrenceType)) {
+            return safeInterval == 1 ? "Cada mes" : "Cada " + safeInterval + " meses";
+        }
+        return "No se repite";
+    }
 }

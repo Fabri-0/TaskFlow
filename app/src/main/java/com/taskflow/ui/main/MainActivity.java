@@ -1,15 +1,23 @@
 package com.taskflow.ui.main;
 
 import android.Manifest;
+import android.app.AlarmManager;
+import android.app.NotificationManager;
+import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.Editable;
@@ -18,16 +26,21 @@ import android.text.style.RelativeSizeSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.lifecycle.ViewModelProvider;
@@ -36,26 +49,35 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.taskflow.R;
 import com.taskflow.data.local.entity.ProjectEntity;
 import com.taskflow.data.local.entity.TagEntity;
 import com.taskflow.data.local.relation.TaskFull;
+import com.taskflow.notifications.PermissionPrefs;
+import com.taskflow.notifications.ReminderScheduler;
 import com.taskflow.session.SessionManager;
 import com.taskflow.ui.auth.LoginActivity;
+import com.taskflow.ui.board.BoardActivity;
 import com.taskflow.ui.calendar.CalendarActivity;
 import com.taskflow.ui.profile.ProfileActivity;
+import com.taskflow.ui.productivity.ProductivityActivity;
 import com.taskflow.ui.project.ProjectActivity;
 import com.taskflow.ui.task.QuickTaskBottomSheet;
 import com.taskflow.ui.task.TaskDetailActivity;
 import com.taskflow.ui.task.TaskViewModel;
+import com.taskflow.ui.trash.TrashActivity;
 import com.taskflow.utils.Constants;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -69,15 +91,22 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
     private TextView textTodayCounter;
     private TextView textPendingCounter;
     private LinearProgressIndicator progressIndicator;
+    private TextInputLayout inputSearchContainer;
     private TextInputEditText editSearch;
+    private ImageButton buttonSearchToggle;
     private HorizontalScrollView filterScrollView;
     private ChipGroup chipGroupFilters;
     private Chip chipAll;
     private Chip chipToday;
     private Chip chipStarred;
+    private Chip chipUpcoming;
     private Chip chipOverdue;
     private Chip chipCompleted;
     private Chip chipPending;
+    private Chip chipNoDate;
+    private Chip chipArchived;
+    private Chip chipTrash;
+    private MaterialButton buttonFilterMenu;
     private PopupWindow mainFilterPopup;
     private boolean suppressMainFilterDismissRender;
     private LinearLayout drawerStaticContainer;
@@ -91,12 +120,16 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
     private List<TagEntity> drawerTags;
     private boolean mainCategoriesExpanded;
     private boolean mainTagsExpanded;
+    private boolean searchExpanded;
     private int activeFilter = Constants.FILTER_ALL;
     private Long activeProjectId;
     private Long activeTagId;
+    private Integer activePriority;
     private boolean categoriesExpanded;
     private boolean tagsExpanded;
     private boolean accountExpanded;
+    private AlertDialog permissionDialog;
+    private boolean refreshPermissionDialogOnResume;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -118,7 +151,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         setupNavigation();
         setupSearch();
         setupCreationCelebration();
-        requestNotificationPermissionIfNeeded();
+        requestStartupRuntimePermissions();
+        showFirstRunPermissionGuideIfNeeded();
         mainViewModel.setUserId(sessionManager.getActiveUserId());
         mainViewModel.getProjects().observe(this, projects -> {
             drawerProjects = projects;
@@ -141,6 +175,15 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (refreshPermissionDialogOnResume || permissionDialog != null) {
+            refreshPermissionDialogOnResume = false;
+            drawerLayout.postDelayed(this::showPermissionSettings, 220L);
+        }
+    }
+
     private void setupTasks() {
         RecyclerView recyclerTasks = findViewById(R.id.recyclerTasks);
         recyclerTasks.setLayoutManager(new LinearLayoutManager(this));
@@ -159,20 +202,34 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         chipAll = findViewById(R.id.chipAll);
         chipToday = findViewById(R.id.chipToday);
         chipStarred = findViewById(R.id.chipStarred);
+        chipUpcoming = findViewById(R.id.chipUpcoming);
         chipOverdue = findViewById(R.id.chipOverdue);
         chipCompleted = findViewById(R.id.chipCompleted);
         chipPending = findViewById(R.id.chipPending);
+        chipNoDate = findViewById(R.id.chipNoDate);
+        chipArchived = findViewById(R.id.chipArchived);
+        chipTrash = findViewById(R.id.chipTrash);
+        buttonFilterMenu = findViewById(R.id.buttonFilterMenu);
         chipAll.setOnClickListener(v -> applyFilter(Constants.FILTER_ALL));
         chipToday.setOnClickListener(v -> applyFilter(Constants.FILTER_TODAY));
         chipStarred.setOnClickListener(v -> applyFilter(Constants.FILTER_STARRED));
+        chipUpcoming.setOnClickListener(v -> applyFilter(Constants.FILTER_UPCOMING));
         chipOverdue.setOnClickListener(v -> applyFilter(Constants.FILTER_OVERDUE));
         chipCompleted.setOnClickListener(v -> applyFilter(Constants.FILTER_COMPLETED));
         chipPending.setOnClickListener(v -> applyFilter(Constants.FILTER_PENDING));
+        chipNoDate.setOnClickListener(v -> applyFilter(Constants.FILTER_NO_DATE));
+        chipArchived.setOnClickListener(v -> applyFilter(Constants.FILTER_ARCHIVED));
+        chipTrash.setOnClickListener(v -> applyFilter(Constants.FILTER_TRASH));
+        buttonFilterMenu.setOnClickListener(this::showFilterMenu);
         updateStaticFilterSelection();
+        updateAdvancedFilterButtons();
     }
 
     private void setupSearch() {
+        inputSearchContainer = findViewById(R.id.inputSearchContainer);
         editSearch = findViewById(R.id.editSearch);
+        buttonSearchToggle = findViewById(R.id.buttonSearchToggle);
+        buttonSearchToggle.setOnClickListener(v -> toggleSearch());
         editSearch.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -187,6 +244,38 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
             public void afterTextChanged(Editable s) {
             }
         });
+    }
+
+    private void toggleSearch() {
+        if (!searchExpanded) {
+            searchExpanded = true;
+            inputSearchContainer.setVisibility(View.VISIBLE);
+            editSearch.requestFocus();
+            InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (manager != null) {
+                manager.showSoftInput(editSearch, InputMethodManager.SHOW_IMPLICIT);
+            }
+            return;
+        }
+        if (editSearch.getText() != null && editSearch.getText().length() > 0) {
+            editSearch.setText("");
+            return;
+        }
+        collapseSearch();
+    }
+
+    private void collapseSearch() {
+        searchExpanded = false;
+        if (inputSearchContainer != null) {
+            inputSearchContainer.setVisibility(View.GONE);
+        }
+        if (editSearch != null) {
+            editSearch.clearFocus();
+        }
+        InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (manager != null && editSearch != null) {
+            manager.hideSoftInputFromWindow(editSearch.getWindowToken(), 0);
+        }
     }
 
     private void setupCreationCelebration() {
@@ -204,20 +293,27 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         textPaint.setTextSize(15f * getResources().getDisplayMetrics().scaledDensity);
         textPaint.setFakeBoldText(true);
 
-        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, ItemTouchHelper.RIGHT) {
             @Override
             public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
                 int position = viewHolder.getBindingAdapterPosition();
                 TaskFull task = adapter.getTaskAt(position);
+                int dragFlags = adapter.isTaskRow(position) ? ItemTouchHelper.UP | ItemTouchHelper.DOWN : 0;
                 if (!adapter.isTaskRow(position) || task == null || task.task == null || task.task.isCompleted) {
-                    return makeMovementFlags(0, 0);
+                    return makeMovementFlags(dragFlags, 0);
                 }
-                return makeMovementFlags(0, ItemTouchHelper.RIGHT);
+                return makeMovementFlags(dragFlags, ItemTouchHelper.RIGHT);
             }
 
             @Override
             public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
-                return false;
+                int from = viewHolder.getBindingAdapterPosition();
+                int to = target.getBindingAdapterPosition();
+                if (!adapter.isTaskRow(from) || !adapter.isTaskRow(to)) {
+                    return false;
+                }
+                adapter.moveTaskRow(from, to);
+                return true;
             }
 
             @Override
@@ -278,6 +374,10 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
                 startActivity(new Intent(this, ProfileActivity.class));
                 return true;
             }
+            if (id == R.id.nav_productivity) {
+                startActivity(new Intent(this, ProductivityActivity.class));
+                return true;
+            }
             return true;
         });
 
@@ -288,6 +388,10 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         drawerCategoriesHeader = findViewById(R.id.drawerCategoriesHeader);
         drawerTagsHeader = findViewById(R.id.drawerTagsHeader);
         drawerAccountHeader = findViewById(R.id.drawerAccountHeader);
+        View permissionButton = findViewById(R.id.buttonPermissionSettings);
+        if (permissionButton != null) {
+            permissionButton.setOnClickListener(v -> showPermissionSettings());
+        }
         drawerCategoriesHeader.setOnClickListener(v -> {
             categoriesExpanded = !categoriesExpanded;
             renderDrawerSections();
@@ -307,26 +411,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         if (chipGroupFilters == null) {
             return;
         }
-        int filterScrollX = filterScrollView == null ? 0 : filterScrollView.getScrollX();
-        for (int i = chipGroupFilters.getChildCount() - 1; i >= 0; i--) {
-            View child = chipGroupFilters.getChildAt(i);
-            if ("filter_dynamic".equals(child.getTag())) {
-                chipGroupFilters.removeViewAt(i);
-            }
-        }
-        if (projects != null && !projects.isEmpty()) {
-            Chip toggle = createFilterToggle(categoryToggleText(), R.color.accent_teal);
-            toggle.setOnClickListener(v -> toggleMainFilterPopup(true, v));
-            chipGroupFilters.addView(toggle);
-        }
-        if (drawerTags != null && !drawerTags.isEmpty()) {
-            Chip toggle = createFilterToggle(tagToggleText(), R.color.accent_blue);
-            toggle.setOnClickListener(v -> toggleMainFilterPopup(false, v));
-            chipGroupFilters.addView(toggle);
-        }
-        if (filterScrollView != null) {
-            filterScrollView.post(() -> filterScrollView.scrollTo(filterScrollX, 0));
-        }
+        updateAdvancedFilterButtons();
     }
 
     private CharSequence categoryToggleText() {
@@ -414,18 +499,156 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         return chip;
     }
 
+    private void showFilterMenu(View anchor) {
+        dismissMainFilterPopup(true);
+        if (anchor == null || !anchor.isAttachedToWindow()) {
+            return;
+        }
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setBackgroundResource(R.drawable.bg_dialog_panel);
+        content.setPadding(dp(10), dp(10), dp(10), dp(10));
+
+        LinearLayout[] opened = new LinearLayout[1];
+        addFilterDropdown(content, "Prioridad", opened, target -> {
+            addFilterOptionRow(target, "Sin filtro", activePriority == null, () -> applyPriorityFilter(null));
+            addFilterOptionRow(target, "Baja", activePriority != null && activePriority == Constants.PRIORITY_LOW, () -> applyPriorityFilter(Constants.PRIORITY_LOW));
+            addFilterOptionRow(target, "Media", activePriority != null && activePriority == Constants.PRIORITY_MEDIUM, () -> applyPriorityFilter(Constants.PRIORITY_MEDIUM));
+            addFilterOptionRow(target, "Alta", activePriority != null && activePriority == Constants.PRIORITY_HIGH, () -> applyPriorityFilter(Constants.PRIORITY_HIGH));
+            addFilterOptionRow(target, "Urgente", activePriority != null && activePriority == Constants.PRIORITY_URGENT, () -> applyPriorityFilter(Constants.PRIORITY_URGENT));
+        });
+        addFilterDropdown(content, "Categorias", opened, target -> {
+            addFilterOptionRow(target, "Sin filtro", activeProjectId == null, () -> applyProjectFilter(null));
+            if (drawerProjects == null || drawerProjects.isEmpty()) {
+                addFilterOptionRow(target, "Sin categorias", false, null);
+            } else {
+                for (ProjectEntity project : drawerProjects) {
+                    addFilterOptionRow(target, project.name, activeProjectId != null && activeProjectId == project.id,
+                            () -> applyProjectFilter(project.id));
+                }
+            }
+        });
+        addFilterDropdown(content, "Etiquetas", opened, target -> {
+            addFilterOptionRow(target, "Sin filtro", activeTagId == null, () -> applyTagFilter(null));
+            if (drawerTags == null || drawerTags.isEmpty()) {
+                addFilterOptionRow(target, "Sin etiquetas", false, null);
+            } else {
+                for (TagEntity tag : drawerTags) {
+                    addFilterOptionRow(target, tag.name, activeTagId != null && activeTagId == tag.id,
+                            () -> applyTagFilter(tag.id));
+                }
+            }
+        });
+        addFilterRootRow(content, "Limpiar filtros", this::clearAdvancedFilters);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(false);
+        scrollView.addView(content);
+        int popupWidth = Math.min(getResources().getDisplayMetrics().widthPixels - dp(56), dp(292));
+        int popupHeight = Math.min((int) (getResources().getDisplayMetrics().heightPixels * 0.48f), dp(340));
+        mainFilterPopup = new PopupWindow(scrollView, popupWidth, popupHeight, true);
+        mainFilterPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        mainFilterPopup.setOutsideTouchable(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            mainFilterPopup.setElevation(dp(12));
+        }
+        mainFilterPopup.setOnDismissListener(() -> {
+            mainFilterPopup = null;
+            suppressMainFilterDismissRender = false;
+        });
+        content.setAlpha(0f);
+        content.setTranslationY(-dp(8));
+        int[] anchorLocation = new int[2];
+        anchor.getLocationOnScreen(anchorLocation);
+        int screenWidth = getResources().getDisplayMetrics().widthPixels;
+        int edgePadding = dp(18);
+        int xOffset = 0;
+        if (anchorLocation[0] + popupWidth > screenWidth - edgePadding) {
+            xOffset = screenWidth - edgePadding - (anchorLocation[0] + popupWidth);
+        }
+        if (anchorLocation[0] + xOffset < edgePadding) {
+            xOffset = edgePadding - anchorLocation[0];
+        }
+        mainFilterPopup.showAsDropDown(anchor, xOffset, dp(8));
+        content.animate().alpha(1f).translationY(0f).setDuration(160).start();
+    }
+
+    private void addFilterDropdown(LinearLayout parent, String title, LinearLayout[] opened, FilterOptionsBuilder builder) {
+        addFilterRootRow(parent, title, null);
+        TextView header = (TextView) parent.getChildAt(parent.getChildCount() - 1);
+        LinearLayout options = new LinearLayout(this);
+        options.setOrientation(LinearLayout.VERTICAL);
+        options.setVisibility(View.GONE);
+        options.setPadding(dp(8), dp(6), dp(8), dp(2));
+        builder.build(options);
+        parent.addView(options, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        header.setOnClickListener(v -> {
+            if (opened[0] != null && opened[0] != options) {
+                opened[0].setVisibility(View.GONE);
+            }
+            boolean willOpen = options.getVisibility() != View.VISIBLE;
+            options.setVisibility(willOpen ? View.VISIBLE : View.GONE);
+            opened[0] = willOpen ? options : null;
+        });
+    }
+
+    private void addFilterRootRow(LinearLayout parent, String text, DrawerAction action) {
+        TextView row = new TextView(this);
+        row.setText(text);
+        row.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        row.setTextSize(15f);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setTypeface(row.getTypeface(), android.graphics.Typeface.BOLD);
+        row.setBackgroundResource(R.drawable.bg_drawer_child_item);
+        row.setMinHeight(dp(46));
+        row.setPadding(dp(14), dp(10), dp(14), dp(10));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, parent.getChildCount() == 0 ? 0 : dp(8), 0, 0);
+        parent.addView(row, params);
+        if (action != null) {
+            row.setOnClickListener(v -> action.run());
+        }
+    }
+
+    private void addFilterOptionRow(LinearLayout parent, String text, boolean active, DrawerAction action) {
+        TextView row = new TextView(this);
+        row.setText(text);
+        row.setTextColor(ContextCompat.getColor(this, active ? R.color.on_primary : R.color.text_primary));
+        row.setTextSize(13f);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setTypeface(row.getTypeface(), android.graphics.Typeface.BOLD);
+        row.setBackgroundResource(active ? R.drawable.bg_drawer_section : R.drawable.bg_drawer_child_item);
+        row.setMinHeight(dp(40));
+        row.setPadding(dp(12), dp(8), dp(12), dp(8));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, parent.getChildCount() == 0 ? 0 : dp(6), 0, 0);
+        parent.addView(row, params);
+        if (action != null) {
+            row.setOnClickListener(v -> action.run());
+        } else {
+            row.setAlpha(0.55f);
+        }
+    }
+
     private void toggleMainFilterPopup(boolean categories, View anchor) {
         boolean shouldOpen = categories ? !mainCategoriesExpanded : !mainTagsExpanded;
         dismissMainFilterPopup(true);
         mainCategoriesExpanded = categories && shouldOpen;
         mainTagsExpanded = !categories && shouldOpen;
-        if (anchor instanceof Chip) {
-            ((Chip) anchor).setText(categories ? categoryToggleText() : tagToggleText());
-        }
+        updateAdvancedFilterButtons();
         if (shouldOpen) {
             anchor.post(() -> showMainFilterPopup(categories, anchor));
         } else {
-            renderProjectChips(drawerProjects);
+            updateAdvancedFilterButtons();
         }
     }
 
@@ -438,20 +661,22 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         content.setBackgroundResource(R.drawable.bg_dialog_panel);
         content.setPadding(dp(10), dp(10), dp(10), dp(10));
         if (categories) {
-            if (drawerProjects == null || drawerProjects.isEmpty()) {
-                return;
-            }
-            for (ProjectEntity project : drawerProjects) {
-                addMainPopupRow(content, "✨ " + project.name, activeProjectId != null && activeProjectId == project.id,
-                        () -> applyProjectFilter(project.id));
+            addMainPopupRow(content, "🗂️ Sin filtro", activeProjectId == null,
+                    () -> applyProjectFilter(null));
+            if (drawerProjects != null) {
+                for (ProjectEntity project : drawerProjects) {
+                    addMainPopupRow(content, "✨ " + project.name, activeProjectId != null && activeProjectId == project.id,
+                            () -> applyProjectFilter(project.id));
+                }
             }
         } else {
-            if (drawerTags == null || drawerTags.isEmpty()) {
-                return;
-            }
-            for (TagEntity tag : drawerTags) {
-                addMainPopupRow(content, "🏷️ " + tag.name, activeTagId != null && activeTagId == tag.id,
-                        () -> applyTagFilter(tag.id));
+            addMainPopupRow(content, "🏷️ Sin filtro", activeTagId == null,
+                    () -> applyTagFilter(null));
+            if (drawerTags != null) {
+                for (TagEntity tag : drawerTags) {
+                    addMainPopupRow(content, "🏷️ " + tag.name, activeTagId != null && activeTagId == tag.id,
+                            () -> applyTagFilter(tag.id));
+                }
             }
         }
         int popupWidth = Math.min(getResources().getDisplayMetrics().widthPixels - dp(36), dp(380));
@@ -536,10 +761,16 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         drawerStaticContainer.removeAllViews();
         addDrawerRow(drawerStaticContainer, "✅ Todas", () -> applyDrawerFilter(Constants.FILTER_ALL));
         addDrawerRow(drawerStaticContainer, "📅 Hoy", () -> applyDrawerFilter(Constants.FILTER_TODAY));
-        addDrawerRow(drawerStaticContainer, "⭐ Tareas estrella", () -> applyDrawerFilter(Constants.FILTER_STARRED));
+        addDrawerRow(drawerStaticContainer, "🗓️ Proximas", () -> applyDrawerFilter(Constants.FILTER_UPCOMING));
+        addDrawerRow(drawerStaticContainer, "⭐ Favoritas", () -> applyDrawerFilter(Constants.FILTER_STARRED));
         addDrawerRow(drawerStaticContainer, "🔥 Vencidas", () -> applyDrawerFilter(Constants.FILTER_OVERDUE));
         addDrawerRow(drawerStaticContainer, "⏳ Pendientes", () -> applyDrawerFilter(Constants.FILTER_PENDING));
         addDrawerRow(drawerStaticContainer, "🎉 Completadas", () -> applyDrawerFilter(Constants.FILTER_COMPLETED));
+        addDrawerRow(drawerStaticContainer, "🗓️ Sin fecha", () -> applyDrawerFilter(Constants.FILTER_NO_DATE));
+        addDrawerRow(drawerStaticContainer, "📦 Archivadas", () -> applyDrawerFilter(Constants.FILTER_ARCHIVED));
+        addDrawerRow(drawerStaticContainer, "🗑️ Papeleria", () -> startActivity(new Intent(this, TrashActivity.class)));
+        addDrawerRow(drawerStaticContainer, "🧩 Tablero", () -> startActivity(new Intent(this, BoardActivity.class)));
+        addDrawerRow(drawerStaticContainer, "📈 Avance", () -> startActivity(new Intent(this, ProductivityActivity.class)));
         drawerCategoriesHeader.setText(countLabelText("🗂️ ", categoryCount(), "Categoria", "Categorias", categoriesExpanded ? "  ▾" : "  ▸"));
         drawerTagsHeader.setText(countLabelText("🏷️ ", tagCount(), "Etiqueta", "Etiquetas", tagsExpanded ? "  ▾" : "  ▸"));
         drawerAccountHeader.setText(accountExpanded ? "👤 Cuenta  ▾" : "👤 Cuenta  ▸");
@@ -656,50 +887,310 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
-    private void requestNotificationPermissionIfNeeded() {
+    private void requestStartupRuntimePermissions() {
+        List<String> permissions = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 40);
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS);
         }
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (!permissions.isEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 40);
+        }
+    }
+
+    private void showFirstRunPermissionGuideIfNeeded() {
+        if (!hasMissingSystemPermission()) {
+            return;
+        }
+        drawerLayout.postDelayed(this::showPermissionSettings, 650L);
+    }
+
+    private void showPermissionSettings() {
+        if (permissionDialog != null && permissionDialog.isShowing()) {
+            permissionDialog.dismiss();
+        }
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(8), dp(8), dp(8), dp(4));
+        addPermissionSwitch(content, "⏰ Alarmas", PermissionPrefs.isAlarmsEnabled(this), hasNotificationSystemAccess(),
+                this::enableAlarms, () -> disableAppPermission("Alarmas", () -> PermissionPrefs.setAlarmsEnabled(this, false)));
+        addPermissionSwitch(content, "🎯 Hora exacta", PermissionPrefs.isExactEnabled(this), hasExactAlarmAccess(),
+                this::enableExactAlarms, () -> disableAppPermission("Hora exacta", () -> PermissionPrefs.setExactEnabled(this, false)));
+        addPermissionSwitch(content, "📲 Pantalla completa", PermissionPrefs.isFullscreenEnabled(this), hasFullScreenIntentAccess(),
+                this::enableFullScreenAlerts, () -> disableAppPermission("Pantalla completa", () -> PermissionPrefs.setFullscreenEnabled(this, false)));
+        addPermissionSwitch(content, "🔋 Segundo plano", PermissionPrefs.isBackgroundEnabled(this), hasBatteryAccess(),
+                this::enableBackgroundAccess, () -> disableAppPermission("Segundo plano", () -> PermissionPrefs.setBackgroundEnabled(this, false)));
+        addPermissionSwitch(content, "📳 Vibracion", PermissionPrefs.isVibrationEnabled(this), true,
+                () -> {
+                    PermissionPrefs.setVibrationEnabled(this, true);
+                    showPermissionSettings();
+                },
+                () -> disableAppPermission("Vibracion", () -> PermissionPrefs.setVibrationEnabled(this, false)));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Permisos de TaskFlow")
+                .setView(content)
+                .setPositiveButton("Cerrar", null)
+                .create();
+        permissionDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (permissionDialog == dialog) {
+                permissionDialog = null;
+            }
+        });
+        permissionDialog.show();
+    }
+
+    private void addPermissionSwitch(LinearLayout parent, String label, boolean appEnabled, boolean systemReady,
+                                     DrawerAction enableAction, DrawerAction disableAction) {
+        boolean enabled = appEnabled && systemReady;
+        SwitchMaterial permissionSwitch = new SwitchMaterial(this);
+        String status = enabled ? "Activo" : (!appEnabled ? "Desactivado en TaskFlow" : "Falta permiso del sistema");
+        permissionSwitch.setText(label + "\n" + status);
+        permissionSwitch.setTextColor(ContextCompat.getColor(this, R.color.text_primary));
+        permissionSwitch.setTextSize(15f);
+        permissionSwitch.setChecked(enabled);
+        permissionSwitch.setPadding(dp(10), dp(8), dp(10), dp(8));
+        ColorStateList thumb = new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{ContextCompat.getColor(this, R.color.success), ContextCompat.getColor(this, R.color.text_secondary)}
+        );
+        ColorStateList track = new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{0x5522C55E, 0x226F6780}
+        );
+        permissionSwitch.setThumbTintList(thumb);
+        permissionSwitch.setTrackTintList(track);
+        permissionSwitch.setOnClickListener(v -> {
+            permissionSwitch.setChecked(enabled);
+            if (enabled) {
+                if (disableAction != null) {
+                    disableAction.run();
+                }
+            } else if (enableAction != null) {
+                enableAction.run();
+            }
+        });
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, parent.getChildCount() == 0 ? 0 : dp(8), 0, 0);
+        parent.addView(permissionSwitch, params);
+    }
+
+    private boolean hasMissingSystemPermission() {
+        return (PermissionPrefs.isAlarmsEnabled(this) && !hasNotificationSystemAccess())
+                || (PermissionPrefs.isExactEnabled(this) && !hasExactAlarmAccess())
+                || (PermissionPrefs.isFullscreenEnabled(this) && !hasFullScreenIntentAccess())
+                || (PermissionPrefs.isBackgroundEnabled(this) && !hasBatteryAccess());
+    }
+
+    private boolean hasNotificationSystemAccess() {
+        return (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+                && NotificationManagerCompat.from(this).areNotificationsEnabled();
+    }
+
+    private void enableAlarms() {
+        PermissionPrefs.setAlarmsEnabled(this, true);
+        ReminderScheduler.ensureChannel(this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            refreshPermissionDialogOnResume = true;
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 40);
+            return;
+        }
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            openPermissionSystemSettings(notificationSettingsIntent());
+            return;
+        }
+        showPermissionSettings();
+    }
+
+    private void enableExactAlarms() {
+        PermissionPrefs.setExactEnabled(this, true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasExactAlarmAccess()) {
+            openPermissionSystemSettings(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, packageUri()));
+            return;
+        }
+        showPermissionSettings();
+    }
+
+    private void enableFullScreenAlerts() {
+        PermissionPrefs.setFullscreenEnabled(this, true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !hasFullScreenIntentAccess()) {
+            openPermissionSystemSettings(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, packageUri()));
+            return;
+        }
+        showPermissionSettings();
+    }
+
+    private void enableBackgroundAccess() {
+        PermissionPrefs.setBackgroundEnabled(this, true);
+        if (!hasBatteryAccess()) {
+            openPermissionSystemSettings(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, packageUri()));
+            return;
+        }
+        showPermissionSettings();
+    }
+
+    private void disableAppPermission(String label, DrawerAction action) {
+        new AlertDialog.Builder(this)
+                .setTitle("Desactivar " + label)
+                .setMessage("Se desactivara dentro de TaskFlow sin salir de la app. Puedes volver a activarlo cuando quieras.")
+                .setPositiveButton("Aceptar", (dialog, which) -> {
+                    if (action != null) {
+                        action.run();
+                    }
+                    showPermissionSettings();
+                })
+                .setNegativeButton("Cancelar", (dialog, which) -> showPermissionSettings())
+                .show();
+    }
+
+    private boolean hasExactAlarmAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true;
+        }
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        return alarmManager == null || alarmManager.canScheduleExactAlarms();
+    }
+
+    private boolean hasFullScreenIntentAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return true;
+        }
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
+        return notificationManager == null || notificationManager.canUseFullScreenIntent();
+    }
+
+    private boolean hasBatteryAccess() {
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        return powerManager == null || powerManager.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    private void openSystemSettings(Intent intent) {
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException | SecurityException e) {
+            startActivity(appSettingsIntent());
+        }
+    }
+
+    private void openPermissionSystemSettings(Intent intent) {
+        refreshPermissionDialogOnResume = true;
+        openSystemSettings(intent);
+    }
+
+    private Intent notificationSettingsIntent() {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        intent.putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+        return intent;
+    }
+
+    private Intent appSettingsIntent() {
+        return new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri());
+    }
+
+    private Uri packageUri() {
+        return Uri.parse("package:" + getPackageName());
     }
 
     private void applyFilter(int filter) {
         clearSearch();
         activeFilter = filter;
-        activeProjectId = null;
-        activeTagId = null;
         mainCategoriesExpanded = false;
         mainTagsExpanded = false;
         dismissMainFilterPopup();
-        renderProjectChips(drawerProjects);
+        updateAdvancedFilterButtons();
         updateStaticFilterSelection();
         mainViewModel.setFilter(filter);
     }
 
-    private void applyProjectFilter(long projectId) {
+    private void applyProjectFilter(Long projectId) {
         clearSearch();
-        activeFilter = -1;
         activeProjectId = projectId;
-        activeTagId = null;
         mainCategoriesExpanded = false;
         mainTagsExpanded = false;
         dismissMainFilterPopup();
-        renderProjectChips(drawerProjects);
-        chipGroupFilters.clearCheck();
+        updateAdvancedFilterButtons();
         mainViewModel.setProjectFilter(projectId);
     }
 
-    private void applyTagFilter(long tagId) {
+    private void applyTagFilter(Long tagId) {
         clearSearch();
-        activeFilter = -1;
-        activeProjectId = null;
         activeTagId = tagId;
         mainCategoriesExpanded = false;
         mainTagsExpanded = false;
         dismissMainFilterPopup();
-        renderProjectChips(drawerProjects);
-        chipGroupFilters.clearCheck();
+        updateAdvancedFilterButtons();
         mainViewModel.setTagFilter(tagId);
+    }
+
+    private void showPriorityPopup(View anchor) {
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setBackgroundResource(R.drawable.bg_dialog_panel);
+        content.setPadding(dp(10), dp(10), dp(10), dp(10));
+        addMainPopupRow(content, "Sin filtro", activePriority == null, () -> applyPriorityFilter(null));
+        addMainPopupRow(content, "Baja", activePriority != null && activePriority == Constants.PRIORITY_LOW, () -> applyPriorityFilter(Constants.PRIORITY_LOW));
+        addMainPopupRow(content, "Media", activePriority != null && activePriority == Constants.PRIORITY_MEDIUM, () -> applyPriorityFilter(Constants.PRIORITY_MEDIUM));
+        addMainPopupRow(content, "Alta", activePriority != null && activePriority == Constants.PRIORITY_HIGH, () -> applyPriorityFilter(Constants.PRIORITY_HIGH));
+        addMainPopupRow(content, "Urgente", activePriority != null && activePriority == Constants.PRIORITY_URGENT, () -> applyPriorityFilter(Constants.PRIORITY_URGENT));
+        int popupWidth = Math.min(getResources().getDisplayMetrics().widthPixels - dp(36), dp(320));
+        PopupWindow popup = new PopupWindow(content, popupWidth, ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        mainFilterPopup = popup;
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popup.setOutsideTouchable(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            popup.setElevation(dp(12));
+        }
+        content.setAlpha(0f);
+        content.setTranslationY(-dp(8));
+        popup.showAsDropDown(anchor, 0, dp(6));
+        content.animate().alpha(1f).translationY(0f).setDuration(160).start();
+    }
+
+    private void applyPriorityFilter(Integer priority) {
+        activePriority = priority;
+        updateAdvancedFilterButtons();
+        mainViewModel.setPriorityFilter(priority);
+        dismissMainFilterPopup();
+    }
+
+    private void updateAdvancedFilterButtons() {
+        if (buttonFilterMenu == null) {
+            return;
+        }
+        buttonFilterMenu.setText("Filtros");
+    }
+
+    private void clearAdvancedFilters() {
+        activeProjectId = null;
+        activeTagId = null;
+        activePriority = null;
+        mainCategoriesExpanded = false;
+        mainTagsExpanded = false;
+        dismissMainFilterPopup();
+        updateAdvancedFilterButtons();
+        mainViewModel.clearAdvancedFilters();
+    }
+
+    private String priorityLabel(int priority) {
+        if (priority >= Constants.PRIORITY_URGENT) {
+            return "Urgente";
+        }
+        if (priority >= Constants.PRIORITY_HIGH) {
+            return "Alta";
+        }
+        if (priority >= Constants.PRIORITY_MEDIUM) {
+            return "Media";
+        }
+        return "Baja";
     }
 
     private void updateStaticFilterSelection() {
@@ -714,6 +1205,9 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
             case Constants.FILTER_STARRED:
                 checkedId = R.id.chipStarred;
                 break;
+            case Constants.FILTER_UPCOMING:
+                checkedId = R.id.chipUpcoming;
+                break;
             case Constants.FILTER_OVERDUE:
                 checkedId = R.id.chipOverdue;
                 break;
@@ -722,6 +1216,15 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
                 break;
             case Constants.FILTER_PENDING:
                 checkedId = R.id.chipPending;
+                break;
+            case Constants.FILTER_NO_DATE:
+                checkedId = R.id.chipNoDate;
+                break;
+            case Constants.FILTER_ARCHIVED:
+                checkedId = R.id.chipArchived;
+                break;
+            case Constants.FILTER_TRASH:
+                checkedId = R.id.chipTrash;
                 break;
             case Constants.FILTER_ALL:
             default:
@@ -735,6 +1238,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         if (editSearch != null && editSearch.getText() != null && editSearch.getText().length() > 0) {
             editSearch.setText("");
         }
+        collapseSearch();
     }
 
     @Override
@@ -745,12 +1249,105 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
     }
 
     @Override
+    public void onTaskLongPressed(TaskFull task) {
+        if (task == null || task.task == null) {
+            return;
+        }
+        if (task.task.isDeleted) {
+            String[] actions = {"Restaurar", "Eliminar definitivamente"};
+            new AlertDialog.Builder(this)
+                    .setTitle(task.task.title)
+                    .setItems(actions, (dialog, which) -> {
+                        if (which == 0) {
+                            taskViewModel.restoreTask(task.task.id);
+                            applyFilter(Constants.FILTER_ALL);
+                            Toast.makeText(this, "Tarea restaurada.", Toast.LENGTH_SHORT).show();
+                        } else {
+                            taskViewModel.deleteTaskPermanently(task.task.id);
+                            Toast.makeText(this, "Tarea eliminada definitivamente.", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .show();
+            return;
+        }
+        if (task.task.isArchived) {
+            String[] actions = {"Ver detalle", "Desarchivar", "Duplicar", "Mover a papelera"};
+            new AlertDialog.Builder(this)
+                    .setTitle(task.task.title)
+                    .setItems(actions, (dialog, which) -> {
+                        if (which == 0) {
+                            onTaskClicked(task);
+                        } else if (which == 1) {
+                            taskViewModel.archiveTask(task.task.id, false);
+                            applyFilter(Constants.FILTER_ALL);
+                            Toast.makeText(this, "Tarea desarchivada.", Toast.LENGTH_SHORT).show();
+                        } else if (which == 2) {
+                            taskViewModel.duplicateTask(task.task.id);
+                            Toast.makeText(this, "Tarea duplicada.", Toast.LENGTH_SHORT).show();
+                        } else {
+                            taskViewModel.deleteTask(task.task.id);
+                            startActivity(new Intent(this, TrashActivity.class));
+                            Toast.makeText(this, "Tarea enviada a papelera.", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .show();
+            return;
+        }
+        String completeLabel = task.task.isCompleted ? "Reabrir" : "Completar";
+        String[] actions = {"Ver detalle", completeLabel, "Editar", "Temporizador", "Duplicar", "Archivar", "Mover a papelera"};
+        new AlertDialog.Builder(this)
+                .setTitle(task.task.title)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) {
+                        onTaskClicked(task);
+                    } else if (which == 1) {
+                        onTaskCompleted(task, !task.task.isCompleted);
+                    } else if (which == 2) {
+                        openTaskForm(task.task.id);
+                    } else if (which == 3) {
+                        openFocus(task.task.id);
+                    } else if (which == 4) {
+                        taskViewModel.duplicateTask(task.task.id);
+                        Toast.makeText(this, "Tarea duplicada.", Toast.LENGTH_SHORT).show();
+                    } else if (which == 5) {
+                        taskViewModel.archiveTask(task.task.id, true);
+                        applyFilter(Constants.FILTER_ARCHIVED);
+                        Toast.makeText(this, "Tarea archivada.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        taskViewModel.deleteTask(task.task.id);
+                        startActivity(new Intent(this, TrashActivity.class));
+                        Toast.makeText(this, "Tarea enviada a papelera.", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    private void openTaskForm(long taskId) {
+        Intent intent = new Intent(this, com.taskflow.ui.task.TaskFormActivity.class);
+        intent.putExtra(Constants.EXTRA_TASK_ID, taskId);
+        startActivity(intent);
+    }
+
+    private void openFocus(long taskId) {
+        Intent intent = new Intent(this, com.taskflow.ui.task.FocusActivity.class);
+        intent.putExtra(Constants.EXTRA_TASK_ID, taskId);
+        startActivity(intent);
+    }
+
+    @Override
     public void onTaskCompleted(TaskFull task, boolean completed) {
         taskViewModel.toggleCompleted(task.task.id, completed);
         if (completed) {
             playCelebration("Completada 🎉", CelebrationView.completePalette());
         } else {
             playCelebration("Reabierta 🔁", CelebrationView.reopenPalette());
+        }
+    }
+
+    @Override
+    public void onTaskMoved(TaskFull task, int adapterPosition) {
+        if (task != null && task.task != null) {
+            taskViewModel.moveTask(task.task.id, System.currentTimeMillis() + adapterPosition);
         }
     }
 
@@ -775,11 +1372,18 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.Liste
         void run();
     }
 
+    private interface FilterOptionsBuilder {
+        void build(LinearLayout target);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 40 && grantResults.length > 0 && grantResults[0] != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Las tareas se guardan aunque el aviso quede sin notificacion.", Toast.LENGTH_LONG).show();
+        }
+        if (requestCode == 40 && permissionDialog != null) {
+            drawerLayout.postDelayed(this::showPermissionSettings, 180L);
         }
     }
 }

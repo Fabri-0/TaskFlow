@@ -41,7 +41,7 @@ public final class TaskFlowPickerDialogs {
         Calendar calendar = Calendar.getInstance();
         showDateDialog(
                 context,
-                "🔔 Dia del recordatorio",
+                "⏰ Dia de la alarma",
                 "Primero elige el dia; despues marcamos la hora exacta.",
                 calendar,
                 (year, month, dayOfMonth) -> {
